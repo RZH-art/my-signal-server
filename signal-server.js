@@ -4,72 +4,63 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*" } });
 
-// 关键配置：允许所有来源连接
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
-
-// 一个健康检查路由
+// 一个简单的根路由，用于测试服务器是否存活
 app.get('/', (req, res) => {
-  res.send('Signal Server is Running');
+  res.send('Render Signal Server is LIVE');
 });
 
+// 存储房间关系
 const rooms = {};
 
 io.on('connection', (socket) => {
-    console.log('新用户连接:', socket.id);
+  console.log('[连接] 新用户:', socket.id);
 
-    socket.on('join_room', (roomId) => {
-        socket.join(roomId);
-        rooms[socket.id] = roomId;
-        const roomMembers = io.sockets.adapter.rooms.get(roomId);
-        const playerCount = roomMembers ? roomMembers.size : 0;
-        console.log(`用户 ${socket.id} 加入房间 ${roomId} (当前${playerCount}人)`);
-        io.to(roomId).emit('room_update', { count: playerCount });
-        if (playerCount === 2) {
-            socket.to(roomId).emit('start_webrtc', { target: socket.id });
-        }
-    });
+  socket.on('join_room', (roomId) => {
+    socket.join(roomId);
+    rooms[socket.id] = roomId;
+    const playerCount = io.sockets.adapter.rooms.get(roomId)?.size || 0;
+    console.log(`[房间] ${socket.id} 加入 ${roomId}， 当前${playerCount}人`);
+    
+    // 通知房间内所有人更新人数
+    io.to(roomId).emit('room_update', { count: playerCount });
+    
+    // 当第二个人加入时，通知第一个人开始建立P2P连接
+    if (playerCount === 2) {
+      socket.to(roomId).emit('start_webrtc', { target: socket.id });
+    }
+  });
 
-    socket.on('webrtc_signal', (data) => {
-        socket.to(data.target).emit('webrtc_signal', {
-            from: socket.id,
-            signal: data.signal
-        });
+  // 转发所有WebRTC信令
+  socket.on('webrtc_signal', (data) => {
+    socket.to(data.target).emit('webrtc_signal', {
+      from: socket.id,
+      signal: data.signal
     });
+  });
 
-    socket.on('game_data', (data) => {
-        // 正确写法：使用 data.room 访问房间号
-        socket.to(data.room).emit('game_data', {
-            from: socket.id,
-            action: data.action,
-            payload: data.payload
-        });
+  // 转发游戏数据
+  socket.on('game_data', (data) => {
+    socket.to(data.room).emit('game_data', {
+      from: socket.id,
+      action: data.action,
+      payload: data.payload
     });
+  });
 
-    socket.on('disconnect', () => {
-        const roomId = rooms[socket.id];
-        if (roomId) {
-            socket.to(roomId).emit('player_left', { id: socket.id });
-            delete rooms[socket.id];
-        }
-        console.log('用户断开:', socket.id);
-    });
+  socket.on('disconnect', () => {
+    const roomId = rooms[socket.id];
+    if (roomId) {
+      socket.to(roomId).emit('player_left', { id: socket.id });
+      delete rooms[socket.id];
+    }
+    console.log('[断开]', socket.id);
+  });
 });
 
-// ！！！关键修正：正确的导出函数
-module.exports = (req, res) => {
-  app(req, res);
-};
-
-// 仅在本地直接运行时才执行（云平台会忽略这部分）
-if (require.main === module) {
-  const PORT = process.env.PORT || 3000;
-  server.listen(PORT, () => {
-    console.log(`本地服务器运行在端口 ${PORT}`);
-  });
-}
+// 在Render上，只需要监听环境变量PORT提供的端口
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`✅ 信令服务器已在端口 ${PORT} 上成功启动`);
+});
