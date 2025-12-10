@@ -5,22 +5,21 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-// 关键配置
+// 关键配置：允许所有来源连接
 const io = new Server(server, {
   cors: {
-    origin: "*", // 允许所有前端域名连接
+    origin: "*",
     methods: ["GET", "POST"]
   }
 });
 
-// 一个健康检查路由，用于测试
+// 一个健康检查路由
 app.get('/', (req, res) => {
-  res.send('Signal Server is Running on Vercel');
+  res.send('Signal Server is Running');
 });
 
 const rooms = {};
 
-// 以下是你原有的 Socket.io 业务逻辑，保持不变
 io.on('connection', (socket) => {
     console.log('新用户连接:', socket.id);
 
@@ -44,6 +43,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('game_data', (data) => {
+        // 这里修正了：data.room 而不是 data, room
         socket.to(data.room).emit('game_data', {
             from: socket.id,
             action: data.action,
@@ -61,13 +61,12 @@ io.on('connection', (socket) => {
     });
 });
 
-// 关键修改：导出 app 和 server，供 Vercel 使用
+// ！！！关键修正：正确的导出函数（用于Vercel/Render等云平台）
 module.exports = (req, res) => {
-  // 将 HTTP 请求交给 Express 处理
   app(req, res);
 };
 
-// 仅在本地运行时才直接监听端口（Vercel环境不需要这一行）
+// 仅在本地直接运行时才执行（云平台会忽略这部分）
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, () => {
