@@ -1,12 +1,11 @@
 {
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/signal-server.js" }
+  ],
   "functions": {
     "api/signal-server.js": {
-      "runtime": "nodejs18.x",
       "memory": 1024,
       "maxDuration": 10
     }
-  },
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api/signal-server.js" }
-  ]
+  }
 }
