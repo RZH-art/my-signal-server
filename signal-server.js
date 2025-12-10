@@ -43,7 +43,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('game_data', (data) => {
-        // 这里修正了：data.room 而不是 data, room
+        // 正确写法：使用 data.room 访问房间号
         socket.to(data.room).emit('game_data', {
             from: socket.id,
             action: data.action,
@@ -61,7 +61,7 @@ io.on('connection', (socket) => {
     });
 });
 
-// ！！！关键修正：正确的导出函数（用于Vercel/Render等云平台）
+// ！！！关键修正：正确的导出函数
 module.exports = (req, res) => {
   app(req, res);
 };
